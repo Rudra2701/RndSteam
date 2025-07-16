@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreenSage - Smart Screen Time Manager</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4285F4;
+            --secondary: #34A853;
+            --accent: #FBBC05;
+            --warning: #EA4335;
+            --bg: #f5f7fa;
+            --text: #333333;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .app-container {
+            width: 360px;
+            height: 640px;
+            background-color: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--primary), #3367D6);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+        
+        .usage-container {
+            background-color: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 200px;
+            margin-bottom: 15px;
+        }
+        
+        .usage-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .productivity { color: var(--primary); }
+        .gaming { color: var(--accent); }
+        .social { color: #9C27B0; }
+        
+        .today-usage {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 10px;
+            color: #666;
+        }
+        
+        .today-usage span {
+            font-weight: 600;
+            color: var(--text);
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .control-btn {
+            flex: 1 0 calc(50% - 5px);
+            min-width: 0;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .control-btn i {
+            margin-right: 8px;
+        }
+        
+        .timer-btn {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .reminder-btn {
+            background-color: var(--secondary);
+            color: white;
+        }
+        
+        .restrict-btn {
+            background-color: var(--warning);
+            color: white;
+        }
+        
+        .stop-btn {
+            background-color: #666;
+            color: white;
+        }
+        
+        .points-display {
+            background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .points-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 5px 0;
+        }
+        
+        .points-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .nav-bar {
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            background-color: white;
+            border-top: 1px solid #eee;
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #666;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .nav-item i {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+        
+        .nav-item.active {
+            color: var(--primary);
+        }
+        
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        
+        .modal-content {
+            background-color: white;
+            width: 80%;
+            max-width: 300px;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--primary);
+        }
+        
+        .close-modal {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        
+        /* Screen Time Detection */
+        .screen-time-detection {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f7ff;
+            border-radius: 12px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .screen-time-detection h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+        
+        .device-list {
+            margin-top: 10px;
+        }
+        
+        .device-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .device-name {
+            font-weight: 500;
+        }
+        
+        .device-time {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>ScreenSage</h1>
+            <p>Smart Screen Time Manager for Teens</p>
+        </div>
+        
+        <div class="content">
+            <div class="usage-container">
+                <h2 class="section-title">Daily Usage</h2>
+                <div class="chart-container">
+                    <canvas id="barChart"></canvas>
+                </div>
+                
+                <div class="usage-stats">
+                    <div class="stat-item">
+                        <div class="stat-value productivity">1h22m</div>
+                        <div class="stat-label">Study Apps</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value gaming">45m</div>
+                        <div class="stat-label">Gaming</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value social">38m</div>
+                        <div class="stat-label">Social Media</div>
+                    </div>
+                </div>
+                
+                <div class="today-usage">
+                    Today: <span>3h 45m</span> (<span>▼10%</span> vs yesterday)
+                </div>
+            </div>
+            
+            <div class="usage-container">
+                <h2 class="section-title">Digital Wellbeing</h2>
+                <div class="chart-container">
+                    <canvas id="pieChart"></canvas>
+                </div>
+                <div class="today-usage" style="text-align: center;">
+                    Tap to see app details
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button class="control-btn timer-btn" id="timerBtn">
+                    <i>⏱️</i> Focus Timer
+                </button>
+                <button class="control-btn reminder-btn" id="reminderBtn">
+                    <i>🔔</i> Smart Reminder
+                </button>
+                <button class="control-btn restrict-btn" id="restrictBtn">
+                    <i>🚫</i> Restrict App
+                </button>
+                <button class="control-btn stop-btn" id="stopBtn">
+                    <i>⏹️</i> Force Stop
+                </button>
+            </div>
+            
+            <div class="points-display">
+                <div class="points-label">Your Productivity Points</div>
+                <div class="points-value" id="pointsValue">120</div>
+                <div class="points-label">Earn badges for offline time</div>
+            </div>
+            
+            <!-- Screen Time Detection Section -->
+            <div class="screen-time-detection">
+                <h3>Device Screen Time</h3>
+                <p>Track time spent across your devices</p>
+                <div class="device-list" id="deviceList">
+                    <!-- Devices will be added here by JavaScript -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="nav-bar">
+            <div class="nav-item active">
+                <i>📊</i>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-item">
+                <i>⏱️</i>
+                <span>Timer</span>
+            </div>
+            <div class="nav-item">
+                <i>🏆</i>
+                <span>Rewards</span>
+            </div>
+            <div class="nav-item">
+                <i>⚙️</i>
+                <span>Settings</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Timer Modal -->
+    <div class="modal" id="timerModal">
+        <div class="modal-content">
+            <span class="close-modal" id="closeTimerModal">×</span>
+            <h2 class="modal-title">Focus Timer</h2>
+            <div style="text-align: center; margin: 20px 0;">
+                <div style="font-size: 36px; font-weight: bold;" id="timerDisplay">25:00</div>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 10px;">
+                <button class="control-btn timer-btn" id="startTimer">Start</button>
+                <button class="control-btn stop-btn" id="pauseTimer">Pause</button>
+                <button class="control-btn reminder-btn" id="resetTimer">Reset</button>
+            </div>
+            <div style="margin-top: 20px;">
+                <label for="timerDuration">Set Duration (minutes):</label>
+                <input type="number" id="timerDuration" min="1" max="120" value="25" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Reminder Modal -->
+    <div class="modal" id="reminderModal">
+        <div class="modal-content">
+            <span class="close-modal" id="closeReminderModal">×</span>
+            <h2 class="modal-title">Smart Reminder</h2>
+            <div style="margin: 15px 0;">
+                <p>Set reminders to manage your screen time:</p>
+                <div style="margin-top: 10px;">
+                    <input type="text" id="reminderMessage" placeholder="e.g., Math time! Close Instagram" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                <div style="margin-top: 10px;">
+                    <label for="reminderTime">After (minutes):</label>
+                    <input type="number" id="reminderTime" min="1" max="240" value="15" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-top: 5px;">
+                </div>
+            </div>
+            <button class="control-btn reminder-btn" id="setReminder" style="width: 100%;">Set Reminder</button>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize charts
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        const barChart = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Productivity', 'Gaming', 'Social'],
+                datasets: [{
+                    data: [82, 45, 38],
+                    backgroundColor: [
+                        '#4285F4',
+                        '#FBBC05',
+                        '#9C27B0'
+                    ],
+                    borderWidth: 0,
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+        
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        const pieChart = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Learning', 'Entertainment', 'Social'],
+                datasets: [{
+                    data: [35, 40, 25],
+                    backgroundColor: [
+                        '#34A853',
+                        '#FBBC05',
+                        '#9C27B0'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+        
+        // Timer functionality
+        let timer;
+        let timerSeconds = 25 * 60;
+        let isTimerRunning = false;
+        
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timerSeconds / 60);
+            const seconds = timerSeconds % 60;
+            document.getElementById('timerDisplay').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        function startTimer() {
+            if (!isTimerRunning) {
+                isTimerRunning = true;
+                timer = setInterval(() => {
+                    timerSeconds--;
+                    updateTimerDisplay();
+                    
+                    if (timerSeconds <= 0) {
+                        clearInterval(timer);
+                        isTimerRunning = false;
+                        alert('Focus session complete! Time for a break.');
+                        addPoints(10);
+                    }
+                }, 1000);
+            }
+        }
+        
+        function pauseTimer() {
+            clearInterval(timer);
+            isTimerRunning = false;
+        }
+        
+        function resetTimer() {
+            clearInterval(timer);
+            isTimerRunning = false;
+            const minutes = parseInt(document.getElementById('timerDuration').value) || 25;
+            timerSeconds = minutes * 60;
+            updateTimerDisplay();
+        }
+        
+        // Modal controls
+        document.getElementById('timerBtn').addEventListener('click', () => {
+            document.getElementById('timerModal').style.display = 'flex';
+            resetTimer();
+        });
+        
+        document.getElementById('reminderBtn').addEventListener('click', () => {
+            document.getElementById('reminderModal').style.display = 'flex';
+        });
+        
+        document.getElementById('closeTimerModal').addEventListener('click', () => {
+            document.getElementById('timerModal').style.display = 'none';
+            pauseTimer();
+        });
+        
+        document.getElementById('closeReminderModal').addEventListener('click', () => {
+            document.getElementById('reminderModal').style.display = 'none';
+        });
+        
+        document.getElementById('startTimer').addEventListener('click', startTimer);
+        document.getElementById('pauseTimer').addEventListener('click', pauseTimer);
+        document.getElementById('resetTimer').addEventListener('click', resetTimer);
+        
+        document.getElementById('setReminder').addEventListener('click', () => {
+            const message = document.getElementById('reminderMessage').value || 'Time to take a break!';
+            const minutes = parseInt(document.getElementById('reminderTime').value) || 15;
+            
+            setTimeout(() => {
+                alert(message);
+                addPoints(5);
+            }, minutes * 60 * 1000);
+            
+            document.getElementById('reminderModal').style.display = 'none';
+            alert(`Reminder set for ${minutes} minutes from now!`);
+        });
+        
+        // Points system
+        let points = 120;
+        
+        function addPoints(amount) {
+            points += amount;
+            document.getElementById('pointsValue').textContent = points;
+            
+            // Animation
+            const pointsElement = document.getElementById('pointsValue');
+            pointsElement.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                pointsElement.style.transform = 'scale(1)';
+            }, 300);
+        }
+        
+        // Screen Time Detection Simulation
+        function simulateDeviceScreenTime() {
+            const devices = [
+                { name: "iPhone 13", time: "2h 15m" },
+                { name: "iPad Pro", time: "1h 30m" },
+                { name: "MacBook Air", time: "3h 45m" },
+                { name: "Android Phone", time: "4h 10m" }
+            ];
+            
+            const deviceList = document.getElementById('deviceList');
+            deviceList.innerHTML = '';
+            
+            devices.forEach(device => {
+                const deviceElement = document.createElement('div');
+                deviceElement.className = 'device-item';
+                deviceElement.innerHTML = `
+                    <span class="device-name">${device.name}</span>
+                    <span class="device-time">${device.time}</span>
+                `;
+                deviceList.appendChild(deviceElement);
+            });
+        }
+        
+        // Initialize
+        updateTimerDisplay();
+        simulateDeviceScreenTime();
+        
+        // Close modals when clicking outside
+        window.addEventListener('click', (event) => {
+            if (event.target.className === 'modal') {
+                event.target.style.display = 'none';
+                pauseTimer();
+            }
+        });
+    </script>
+</body>
+</html>
