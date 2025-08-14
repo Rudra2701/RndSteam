@@ -1,0 +1,110 @@
+ #include <WiFi.h>
+#include <BluetoothSerial.h>
+
+// ===== Configuration ===== //
+#define DEFAULT_SSID    "ESP32-AP"
+#define DEFAULT_PASS    "12345678"
+#define SCREEN_OFF_DELAY 5000    // 5 seconds
+#define HOTSPOT_ON_TIME  30000   // 30 seconds
+#define HOTSPOT_OFF_TIME 500000    // 500 seconds
+#define LED_PIN 2
+
+// ===== Global Variables ===== //
+BluetoothSerial SerialBT;
+bool hotspotActive = true;
+bool screenOffPending = false;
+unsigned long lastToggleTime = 0;
+unsigned long triggerTime = 0;
+
+// WiFi Router Credentials
+const char* routerSSID = "Lexicon F3";
+const char* routerPass = "Lexicon@333";
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  Serial.begin(115200);
+  
+  // Initialize Bluetooth
+  if(!SerialBT.begin("ESP32-Control")) {
+    Serial.println("BT Failed!");
+    while(1);
+  }
+
+  // Initialize WiFi in AP+STA mode
+  WiFi.mode(WIFI_MODE_APSTA);
+  
+  // Start Access Point
+  WiFi.softAP(DEFAULT_SSID, DEFAULT_PASS);
+  Serial.printf("AP IP: %s\n", WiFi.softAPIP().toString().c_str());
+  
+  // Connect to WiFi Router
+  WiFi.begin(routerSSID, routerPass);
+  Serial.print("Connecting to router");
+  while(WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nConnected to router!");
+  Serial.print("Router IP: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  unsigned long currentMillis = millis();
+  
+  // Hotspot Auto-Toggle
+  if(hotspotActive) {
+    if(currentMillis - lastToggleTime >= HOTSPOT_ON_TIME) {
+      toggleHotspot(false);
+    }
+  } else {
+    if(currentMillis - lastToggleTime >= HOTSPOT_OFF_TIME) {
+      toggleHotspot(true);
+    }
+  }
+
+  // Bluetooth Commands
+  if(SerialBT.available()) {
+    char cmd = SerialBT.read();
+    if(cmd == '1') {  // Screen-off trigger
+      triggerTime = currentMillis;
+      screenOffPending = true;
+      SerialBT.println("ACK");
+    }
+    else if(cmd == '2') toggleHotspot(true);
+    else if(cmd == '3') toggleHotspot(false);
+  }
+
+  // Screen Off Command
+  if(screenOffPending && (currentMillis - triggerTime) > SCREEN_OFF_DELAY) {
+    sendScreenOffCommand();
+    screenOffPending = false;
+  }
+
+  delay(100);
+}
+
+void toggleHotspot(bool enable) {
+  if(enable) {
+    WiFi.softAP(DEFAULT_SSID, DEFAULT_PASS);
+    digitalWrite(LED_PIN, HIGH);
+    Serial.println("Hotspot: ON");
+  } else {
+    WiFi.softAPdisconnect(true);
+    digitalWrite(LED_PIN, LOW);
+    Serial.println("Hotspot: OFF");
+  }
+  hotspotActive = enable;
+  lastToggleTime = millis();
+}
+
+void sendScreenOffCommand() {
+  // Method 1: Bluetooth command (requires phone app)
+  SerialBT.println("SCREEN_OFF");
+  digitalWrite(LED_PIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_PIN, LOW);
+  
+  // Method 2: Disconnect Bluetooth to trigger Smart Lock
+  // SerialBT.disconnect();
+}
